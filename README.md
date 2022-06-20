@@ -52,34 +52,41 @@ compared to systemd:
   and generator for calendar events. It is also published for ScalaJS.
   With sbt, use:
   ```sbt
-  libraryDependencies += "com.github.eikek" %% "calev-core" % "0.6.0"
+  libraryDependencies += "com.github.eikek" %% "calev-core" % "0.6.3"
+  ```
+- The *fs2* module contains utilities to work with
+  [FS2](https://github.com/functional-streams-for-scala/fs2) streams.
+  These were taken, thankfully and slightly modified to exchange cron expressions
+  for calendar events, from the
+  [fs2-cron](https://github.com/fthomas/fs2-cron) library.  It is also published
+  for ScalaJS. With sbt, use
+  ```sbt
+  libraryDependencies += "com.github.eikek" %% "calev-fs2" % "0.6.3"
   ```
 - The *doobie* module contains `Meta`, `Read` and `Write` instances
   for `CalEvent` to use with
   [doobie](https://github.com/tpolecat/doobie).
   ```sbt
-  libraryDependencies += "com.github.eikek" %% "calev-doobie" % "0.6.0"
+  libraryDependencies += "com.github.eikek" %% "calev-doobie" % "0.6.3"
   ```
 - The *circe* module defines a json decoder and encoder for `CalEvent`
   instances to use with [circe](https://github.com/circe/circe).  It is also
   published for ScalaJS.
   ```sbt
-  libraryDependencies += "com.github.eikek" %% "calev-circe" % "0.6.0"
+  libraryDependencies += "com.github.eikek" %% "calev-circe" % "0.6.3"
   ```
 - The *jackson* module defines `CalevModule` for [Jackson](https://github.com/FasterXML/jackson)
   ```sbt
-  libraryDependencies += "com.github.eikek" %% "calev-jackson" % "0.6.0"
+  libraryDependencies += "com.github.eikek" %% "calev-jackson" % "0.6.3"
   ```
 - The *akka* module allows to use calendar events with [Akka Scheduler](https://doc.akka.io/docs/akka/current/scheduler.html)
   and [Akka Timers](https://doc.akka.io/docs/akka/current/typed/interaction-patterns.html#typed-scheduling). 
   ```sbt
-  libraryDependencies += "com.github.eikek" %% "calev-akka" % "0.6.0"
+  libraryDependencies += "com.github.eikek" %% "calev-akka" % "0.6.3"
   ```
 
-Note that the fs2 module has been removed. The functionality is now
-available for fs2 3.x from the
-[fs2-cron](https://github.com/fthomas/fs2-cron) library. If calev-fs2
-is required for fs2 2.x, calev version 0.5.4 can be used.
+Note that the fs2 module is also available via
+[fs2-cron](https://github.com/fthomas/fs2-cron) library.
 
 ## Examples
 
@@ -162,16 +169,16 @@ import java.time._
 ce.asString
 // res4: String = "*-*-* 00/2:00:00"
 val now = LocalDateTime.now
-// now: LocalDateTime = 2021-08-20T19:33:01.114
+// now: LocalDateTime = 2022-03-11T21:47:18.418490
 ce.nextElapse(now)
-// res5: Option[LocalDateTime] = Some(value = 2021-08-20T20:00)
+// res5: Option[LocalDateTime] = Some(value = 2022-03-11T22:00)
 ce.nextElapses(now, 5)
 // res6: List[LocalDateTime] = List(
-//   2021-08-20T20:00,
-//   2021-08-20T22:00,
-//   2021-08-21T00:00,
-//   2021-08-21T02:00,
-//   2021-08-21T04:00
+//   2022-03-11T22:00,
+//   2022-03-12T00:00,
+//   2022-03-12T02:00,
+//   2022-03-12T04:00,
+//   2022-03-12T06:00
 // )
 ```
 
@@ -180,6 +187,47 @@ If an event is in the past, the `nextElapsed` returns a `None`:
 ```scala
 CalEvent.unsafe("1900-01-* 12,14:0:0").nextElapse(LocalDateTime.now)
 // res7: Option[LocalDateTime] = None
+```
+
+
+### FS2
+
+The fs2 utilities allow to schedule things based on calendar events.
+This is the same as [fs2-cron](https://github.com/fthomas/fs2-cron)
+provides, only adopted to use calendar events instead of cron
+expressions. The example is also from there.
+
+```scala
+import cats.effect.IO
+import _root_.fs2.Stream
+import com.github.eikek.calev.fs2.Scheduler
+import java.time.LocalTime
+
+val everyTwoSeconds = CalEvent.unsafe("*-*-* *:*:0/2")
+// everyTwoSeconds: CalEvent = CalEvent(
+//   weekday = All,
+//   date = DateEvent(year = All, month = All, day = All),
+//   time = TimeEvent(
+//     hour = All,
+//     minute = All,
+//     seconds = List(values = Vector(Single(value = 0, rep = Some(value = 2))))
+//   ),
+//   zone = None
+// )
+val scheduler = Scheduler.systemDefault[IO]
+// scheduler: Scheduler[IO] = com.github.eikek.calev.fs2.Scheduler$$anon$1@60877629
+
+val printTime = Stream.eval(IO(println(LocalTime.now)))
+// printTime: Stream[IO, Unit] = Stream(..)
+
+val task = scheduler.awakeEvery(everyTwoSeconds) >> printTime
+// task: Stream[IO[x], Unit] = Stream(..)
+
+import cats.effect.unsafe.implicits._
+task.take(3).compile.drain.unsafeRunSync()
+// 21:47:20.018387
+// 21:47:22.001942
+// 21:47:24.002348
 ```
 
 
@@ -213,24 +261,16 @@ val r = Record(CalEvent.unsafe("Mon *-*-* 0/2:15"))
 val insert =
   sql"INSERT INTO mytable (event) VALUES (${r.event})".update.run
 // insert: ConnectionIO[Int] = Suspend(
-//   a = BracketCase(
-//     acquire = Suspend(
-//       a = PrepareStatement(a = "INSERT INTO mytable (event) VALUES (?)")
-//     ),
-//     use = doobie.hi.connection$$$Lambda$44869/1756545421@1c20c20a,
-//     release = cats.effect.Bracket$$Lambda$44871/900537340@6afd9f65
+//   a = Uncancelable(
+//     body = cats.effect.kernel.MonadCancel$$Lambda$2138/0x0000000800c18040@48d44acf
 //   )
 // )
 
 val select =
   sql"SELECT event FROM mytable WHERE id = 1".query[Record].unique
 // select: ConnectionIO[Record] = Suspend(
-//   a = BracketCase(
-//     acquire = Suspend(
-//       a = PrepareStatement(a = "SELECT event FROM mytable WHERE id = 1")
-//     ),
-//     use = doobie.hi.connection$$$Lambda$44869/1756545421@27babfba,
-//     release = cats.effect.Bracket$$Lambda$44871/900537340@e492da6
+//   a = Uncancelable(
+//     body = cats.effect.kernel.MonadCancel$$Lambda$2138/0x0000000800c18040@49f2994f
 //   )
 // )
 ```
@@ -320,7 +360,7 @@ val jackson = JsonMapper
   .builder()
   .addModule(new CalevModule())
   .build()
-// jackson: JsonMapper = com.fasterxml.jackson.databind.json.JsonMapper@12633da9
+// jackson: JsonMapper = com.fasterxml.jackson.databind.json.JsonMapper@2a654f27
 
 val myEvent    = CalEvent.unsafe("Mon *-*-* 05:00/10:00")
 // myEvent: CalEvent = CalEvent(
@@ -388,7 +428,7 @@ CalevBehaviors.withCalevTimers[Message]() { scheduler =>
         same
     }
 }
-// res8: Behavior[Message] = Deferred(TimerSchedulerImpl.scala:29)
+// res9: Behavior[Message] = Deferred(TimerSchedulerImpl.scala:29)
 ```
 
 Use ```CalevBehaviors.withCalendarEvent``` to schedule messages according 
@@ -408,7 +448,7 @@ CalevBehaviors.withCalendarEvent(calEvent)(
       same
   }
 )
-// res9: Behavior[Message] = Deferred(InterceptorImpl.scala:29-30)
+// res10: Behavior[Message] = Deferred(InterceptorImpl.scala:29-30)
 ```
 
 #### Testing
@@ -441,8 +481,8 @@ calevScheduler().scheduleOnceWithCalendarEvent(calEvent, () => {
       s"Called at: ${LocalTime.now}"
   )
 })
-// res10: Option[<none>.<root>.akka.actor.Cancellable] = Some(
-//   value = akka.actor.LightArrayRevolverScheduler$TaskHolder@393105f1
+// res11: Option[<none>.<root>.akka.actor.Cancellable] = Some(
+//   value = akka.actor.LightArrayRevolverScheduler$TaskHolder@5b7f9eaa
 // )
 system.terminate()
 ```
