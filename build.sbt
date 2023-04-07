@@ -1,8 +1,8 @@
-import com.typesafe.sbt.SbtGit.GitKeys._
+import com.github.sbt.git.SbtGit.GitKeys
 
-val scala212 = "2.12.15"
-val scala213 = "2.13.8"
-val scala3 = "3.1.2"
+val scala212 = "2.12.17"
+val scala213 = "2.13.10"
+val scala3 = "3.2.2"
 
 val updateReadme = inputKey[Unit]("Update readme")
 
@@ -92,10 +92,10 @@ val buildInfoSettings = Seq(
     version,
     scalaVersion,
     sbtVersion,
-    gitHeadCommit,
-    gitHeadCommitDate,
-    gitUncommittedChanges,
-    gitDescribedVersion
+    GitKeys.gitHeadCommit,
+    GitKeys.gitHeadCommitDate,
+    GitKeys.gitUncommittedChanges,
+    GitKeys.gitDescribedVersion
   ),
   buildInfoOptions += BuildInfoOption.ToJson,
   buildInfoOptions += BuildInfoOption.BuildTime
